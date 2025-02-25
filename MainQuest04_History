@@ -303,6 +303,5 @@ category = category.rename(columns={
     3: 'sub3_category', 
     4: 'sub4_category'
 })
-
 # DataFrame.join()을 사용하여 병합 (인덱스를 기준으로 합침)
 merged_df = train_df.join(category)
