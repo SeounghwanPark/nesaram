@@ -288,3 +288,21 @@ other, beauty, kids, home, women,
 전체 4일중 2일째 진행되어 계획
 대비 Behind 상태로 Catch-up위해 금일 늦게 까지 작업진행 예정
 금일 데이터 전처리 과정과 컬럼 생성에서 진행속도 늦어짐. 
+category = train_df['category_name'].str.split('/').apply(pd.Series)
+category = category.rename(columns={0: 'main_category', 1: 'sub1_category', 2: 'sub2_category',  3: 'sub3_category', 4: 'sub4_category'})
+merged_df = pd.merge(train_df, category, left_index=True, right_index=True, how='inner')
+※ apply적용시 속도오래 걸리는 문제로 아래 코드로 대체시 속도가 빨라짐
+문자열 분할 시 expand=True 옵션을 사용하여 DataFrame을 바로 반환한 후, DataFrame의 join() 메서드를 사용해 병합하는 방식으로 
+코드를 최적화. apply(pd.Series)를 사용하는 것보다 훨씬 빠릅 아래 코드로 변경실행
+# category_update: 최적화된 코드
+category = train_df['category_name'].str.split('/', expand=True)
+category = category.rename(columns={
+    0: 'main_category', 
+    1: 'sub1_category', 
+    2: 'sub2_category',  
+    3: 'sub3_category', 
+    4: 'sub4_category'
+})
+
+# DataFrame.join()을 사용하여 병합 (인덱스를 기준으로 합침)
+merged_df = train_df.join(category)
