@@ -569,3 +569,21 @@ price랑 카테고리 별 가격 분석해서 price가 높은 것과 낮은것 0
 vintage 값으로만 조회하거나 뒤에 -s를 붙여서 조회해 보니 결과가 괜찮아서 이방법으로 함, 0인수치 많은 카테고리는 다시 조회 앞단어로 또는 s를 
 붙여서 조회하여 되도록 0수치가 없는 수치로 정보수집함) ▶ 이후 수치원본을 각개별 카테고리별로 비율을 계산하여 % 로 표시한 것과 수치로 표시한 자료
 두개 로 준비함.
+헌수 - plt.figure(figsize=(8, 5))
+sns.barplot(x=train_df["shipping"], y=train_df["price"], palette="coolwarm", estimator=sum)
+plt.xlabel("Shipping (0: Buyer Pays, 1: Seller Pays)")
+plt.ylabel("Average Price")
+plt.title("Average Price by Shipping Type") 해당 코드에 대한 로드시간 오래걸리는 문제
+상혁 - output_semifinal3.csv 파일을 카테고리별 평균 가격 행 만들기
+price랑 카테고리 별 가격 분석해서 price가 높은 것(1)과 낮은것 0과 1 값으로 구분하는 행 만들기
+유빈 - 그걸로 word 업데이트해서 4version으로 다시 올리겠습니다 :) output_semifinal4 버전 업로드했습니다.
+작업하시는 분들은 이걸로 작업 부탁드립니다. # output_semifinal1 : 긍부정어 개수 +카테고리 수정 통합본
+# output_semifinal2 : 카테고리별 이름 수정 추가
+# output_semifinal3 : 카테고리별 평균 추가
+# output_semifinal4 : 긍부정어 work, works 개수 수정본
+성환 - brand_names.xlsx 그래프 수정했구요 수치는 제외했습니다. 도저히 안됨. 구글트렌드 추이비율 시트에 있음
+성환 - 트랜드 지수 컬럼 추가해서 상관관계
+유빈-  output_semifinal4 에 트렌드지수 추가해서 output_semifinal5 버전으로 만들어주시면 감사하겠습니다!
+성환 - output_semifinal5.csv 파일로 저장했습니다. Trend컬럼에 0.00130단위로 입력완료. 
+content/drive/MyDrive/아이펠_오마카세_프로젝트/ brand_names.xlsx 파일에 (카테고리별 Trend그래프 넣어놨습니다. Trend시트에 )
+
