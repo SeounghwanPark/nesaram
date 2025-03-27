@@ -1,0 +1,228 @@
+-- -- SELECT * FROM `my-project-0321-454411.ecommerce_mart.v_logistics_dashboard`;
+-- CREATE OR REPLACE TABLE `my-project-0321-454411.ecommerce_mart.v_logistics_dashboard_3` AS
+
+-- WITH base AS (
+--   SELECT
+--     v.*,
+    
+--     -- 배송 소요 일수 계산 (3번째 인자 'DAY' 명시)
+--     DATE_DIFF(DATE(v.delivered_at), DATE(v.shipped_at), DAY) AS delivery_days,
+
+--     -- 배송 지연 여부 (배송일수 > 3일이면 지연)
+--     DATE_DIFF(DATE(v.delivered_at), DATE(v.shipped_at), DAY) > 3 AS delayed,
+
+--     -- 반품 여부 (반품일자 존재 여부)
+--     v.returned_at IS NOT NULL AS returned,
+
+--     -- 사용자 국가 (users 테이블에서 가져옴)
+--     u.country
+--   FROM
+--     `my-project-0321-454411.ecommerce_mart.v_logistics_dashboard` v
+--   LEFT JOIN
+--     `my-project-0321-454411.ecommerce_raw.users` u
+--   ON
+--     v.user_id = u.id
+-- ),
+
+-- summary AS (
+--   SELECT
+--     distribution_center_name AS name,
+--     COUNT(order_id) AS total_orders,
+--     SUM(IF(delayed, 1, 0)) AS delayed_orders,
+--     SUM(IF(returned, 1, 0)) AS returned_orders,
+--     SAFE_DIVIDE(SUM(IF(delayed, 1, 0)), COUNT(order_id)) AS delay_rate,
+--     SAFE_DIVIDE(SUM(IF(returned, 1, 0)), COUNT(order_id)) AS return_rate,
+--     SAFE_DIVIDE(SUM(IF(delayed AND returned, 1, 0)), NULLIF(SUM(IF(delayed, 1, 0)), 0)) AS delay_to_return_rate,
+--     1 - SAFE_DIVIDE(SUM(IF(delayed, 1, 0)), COUNT(order_id)) AS on_time_rate,
+--     -- SPI 계산: 정시율 60% + 반품율 40%
+--     (1 - SAFE_DIVIDE(SUM(IF(delayed, 1, 0)), COUNT(order_id))) * 0.6 +
+--     (1 - SAFE_DIVIDE(SUM(IF(returned, 1, 0)), COUNT(order_id))) * 0.4 AS spi_score
+--   FROM base
+--   GROUP BY distribution_center_name
+-- )
+
+-- SELECT
+--   b.*,
+--   s.name,
+--   s.total_orders,
+--   s.delayed_orders,
+--   s.returned_orders,
+--   s.delay_rate,
+--   s.return_rate,
+--   s.delay_to_return_rate,
+--   s.on_time_rate,
+--   s.spi_score
+-- FROM base b
+-- LEFT JOIN summary s
+-- ON b.distribution_center_name = s.name;
+
+-- SELECT * FROM `my-project-0321-454411.ecommerce_mart.v_logistics_dashboard_3`;
+
+
+
+
+-- CREATE OR REPLACE TABLE `my-project-0321-454411.ecommerce_mart.v_logistics_dashboard_4` AS
+
+-- WITH enriched AS (
+--   SELECT
+--     vd.*,
+
+--     -- 배송 관련 컬럼 보완
+--     COALESCE(oi.shipped_at, o.shipped_at) AS shipped_at_filled,
+--     COALESCE(oi.delivered_at, o.delivered_at) AS delivered_at_filled,
+--     COALESCE(oi.returned_at, o.returned_at) AS returned_at_filled
+
+--   FROM
+--     `my-project-0321-454411.ecommerce_mart.v_logistics_dashboard_3` vd
+
+--   LEFT JOIN
+--     `my-project-0321-454411.ecommerce_raw.order_items` oi
+--   ON vd.order_item_id = oi.id
+
+--   LEFT JOIN
+--     `my-project-0321-454411.ecommerce_raw.orders` o
+--   ON vd.order_id = o.order_id
+-- ),
+
+-- final AS (
+--   SELECT
+--     -- 기존 테이블에서 delivery_days, delayed는 제외하고 나머지 모두 수동 선택
+--     vd.order_item_id,
+--     vd.order_id,
+--     vd.product_id,
+--     vd.user_id,
+--     vd.created_at,
+--     vd.product_distribution_center_id,
+--     vd.distribution_center_name,
+--     vd.latitude,
+--     vd.longitude,
+--     vd.city,
+--     vd.state,
+--     vd.status,
+--     vd.country,
+--     -- 기존 summary 컬럼들
+--     vd.name,
+--     vd.total_orders,
+--     vd.delayed_orders,
+--     vd.returned_orders,
+--     vd.delay_rate,
+--     vd.return_rate,
+--     vd.delay_to_return_rate,
+--     vd.on_time_rate,
+--     vd.spi_score,
+
+--     -- 보완된 배송 컬럼
+--     shipped_at_filled AS shipped_at,
+--     delivered_at_filled AS delivered_at,
+--     returned_at_filled AS returned_at,
+
+--     -- 새로 계산된 배송일수 및 지연 여부
+--     DATE_DIFF(DATE(delivered_at_filled), DATE(shipped_at_filled), DAY) AS delivery_days,
+--     DATE_DIFF(DATE(delivered_at_filled), DATE(shipped_at_filled), DAY) > 3 AS delayed
+
+--   FROM enriched vd
+-- )
+
+-- SELECT * FROM final;
+
+-- SELECT * FROM `my-project-0321-454411.ecommerce_mart.v_logistics_dashboard_4`;
+
+-- -- 1. 좌표별 대표 도시 매핑 테이블 생성
+-- CREATE OR REPLACE TABLE `my-project-0321-454411.ecommerce_mart.coord_city_mapping` AS
+-- SELECT
+--   ROUND(latitude, 3) AS lat_round,
+--   ROUND(longitude, 3) AS lon_round,
+--   ANY_VALUE(city) AS city
+-- FROM
+--   `my-project-0321-454411.ecommerce_mart.v_logistics_dashboard_4`
+-- WHERE
+--   city IS NOT NULL
+-- GROUP BY
+--   lat_round, lon_round;
+
+-- -- 2. city가 NULL인 레코드 보완하여 새 테이블 생성
+-- CREATE OR REPLACE TABLE `my-project-0321-454411.ecommerce_mart.v_logistics_dashboard_4_filled` AS
+-- SELECT
+--   a.*,
+--   IF(a.city IS NULL, b.city, a.city) AS filled_city
+-- FROM
+--   `my-project-0321-454411.ecommerce_mart.v_logistics_dashboard_4` a
+-- LEFT JOIN
+--   `my-project-0321-454411.ecommerce_mart.coord_city_mapping` b
+-- ON
+--   ROUND(a.latitude, 3) = b.lat_round AND
+--   ROUND(a.longitude, 3) = b.lon_round;
+
+-- -- 3. 최종 테이블에서 filled_city로 city 컬럼을 대체
+-- CREATE OR REPLACE TABLE `my-project-0321-454411.ecommerce_mart.v_logistics_dashboard_4_final` AS
+-- SELECT
+--   order_item_id, order_id, product_id, user_id, created_at,
+--   product_distribution_center_id, distribution_center_name,
+--   latitude, longitude,
+--   filled_city AS city,
+--   state, status, country, name, total_orders, delayed_orders,
+--   returned_orders, delay_rate, return_rate, delay_to_return_rate,
+--   on_time_rate, spi_score, shipped_at, delivered_at,
+--   returned_at, delivery_days, delayed
+-- FROM
+--   `my-project-0321-454411.ecommerce_mart.v_logistics_dashboard_4_filled`;
+
+-- 1. 좌표별 대표 지역정보 매핑 테이블 생성 (postal_code 제거)
+-- CREATE OR REPLACE TABLE `my-project-0321-454411.ecommerce_mart.coord_location_mapping` AS
+-- SELECT
+--   ROUND(latitude, 3) AS lat_round,
+--   ROUND(longitude, 3) AS lon_round,
+--   ANY_VALUE(city) AS city,
+--   ANY_VALUE(state) AS state,
+--   ANY_VALUE(country) AS country
+-- FROM
+--   `my-project-0321-454411.ecommerce_mart.v_logistics_dashboard_4`
+-- WHERE
+--   city IS NOT NULL OR state IS NOT NULL OR country IS NOT NULL
+-- GROUP BY
+--   lat_round, lon_round;
+
+-- -- 2. 원본 테이블과 조인하여 모든 컬럼 결측값 보완 (postal_code 제거)
+-- CREATE OR REPLACE TABLE `my-project-0321-454411.ecommerce_mart.v_logistics_dashboard_4_filled` AS
+-- SELECT
+--   a.*,
+--   IF(a.city IS NULL, b.city, a.city) AS filled_city,
+--   IF(a.state IS NULL, b.state, a.state) AS filled_state,
+--   IF(a.country IS NULL, b.country, a.country) AS filled_country
+-- FROM
+--   `my-project-0321-454411.ecommerce_mart.v_logistics_dashboard_4` a
+-- LEFT JOIN
+--   `my-project-0321-454411.ecommerce_mart.coord_location_mapping` b
+-- ON
+--   ROUND(a.latitude, 3) = b.lat_round AND
+--   ROUND(a.longitude, 3) = b.lon_round;
+
+
+-- -- 3. 최종 테이블에서 filled 컬럼으로 덮어쓰기 (postal_code 제거)
+-- CREATE OR REPLACE TABLE `my-project-0321-454411.ecommerce_mart.v_logistics_dashboard_4_final` AS
+-- SELECT
+--   order_item_id, order_id, product_id, user_id, created_at,
+--   product_distribution_center_id, distribution_center_name,
+--   latitude, longitude,
+--   filled_city AS city,
+--   filled_state AS state,
+--   filled_country AS country,
+--   name, total_orders, delayed_orders, returned_orders,
+--   delay_rate, return_rate, delay_to_return_rate,
+--   on_time_rate, spi_score,
+--   shipped_at, delivered_at, returned_at,
+--   delivery_days, delayed
+-- FROM
+--   `my-project-0321-454411.ecommerce_mart.v_logistics_dashboard_4_filled`;
+
+-- -- BigQuery 뷰 생성 
+-- CREATE OR REPLACE VIEW `my-project-0321-454411.ecommerce_mart2.v_logistics_dashboard_4_view` AS
+-- SELECT *
+-- FROM `my-project-0321-454411.ecommerce_mart2.v_logistics_dashboard_4_final`;
+
+-- -- 뷰 이름 바꾸기 (기존 → 새 이름) 태블로에서는 영문 추천
+-- CREATE OR REPLACE VIEW `my-project-0321-454411.ecommerce_mart2.v_logistics_dashboard_4물류팀` AS
+-- SELECT *
+-- FROM `my-project-0321-454411.ecommerce_mart2.v_logistics_dashboard_4_view`;
+
+-- SELECT * FROM `my-project-0321-454411.ecommerce_mart2.v_logistics_dashboard_4_view`;
